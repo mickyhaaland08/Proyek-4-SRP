@@ -102,9 +102,22 @@ class _CounterViewState extends State<CounterView> {
           ),
         ],
       ),
-      floatingActionButton: Row(
+      floatingActionButton: Column(
   mainAxisAlignment: MainAxisAlignment.center,
   children: [
+    // Tombol Reset
+    SizedBox(
+      height: 50,
+      width: 50,
+      child: FloatingActionButton(
+        onPressed: () {
+          _showResetDialog(); // Panggil fungsi konfirmasi
+        },
+        heroTag: "btn_reset",
+        child: const Icon(Icons.refresh),
+    ),
+    ),
+    const SizedBox(width: 20),
 
     // Tombol Kurang
     FloatingActionButton(
@@ -118,19 +131,6 @@ class _CounterViewState extends State<CounterView> {
       child: const Icon(Icons.remove),
     ),
 
-    const SizedBox(width: 20),
-
-    // Tombol Reset
-    SizedBox(
-      child: FloatingActionButton(
-        onPressed: () {
-          _showResetDialog(); // Panggil fungsi konfirmasi
-        },
-        heroTag: "btn_reset",
-        child: const Icon(Icons.refresh),
-    ),
-    ),
-    
     const SizedBox(width: 20),
 
     // Tombol Tambah
@@ -149,4 +149,6 @@ class _CounterViewState extends State<CounterView> {
     );
   }
 }
+
+
 
