@@ -43,23 +43,30 @@ class _CounterViewState extends State<CounterView> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color.fromARGB(255, 6, 19, 18),
       appBar: AppBar(
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+        backgroundColor: const Color.fromARGB(255, 0, 128, 115),
         title: const Text("LogBook: The History Logger | Task 2"),
       ),
       body: Column( // Ubah Center menjadi Column agar bisa menampung banyak bagian
         children: [
           const SizedBox(height: 30),
-          const Text("Total Hitungan:"),
+          const Text("Total Hitungan:", style: TextStyle(
+            fontSize: 16,
+            color: const Color.fromARGB(255, 0, 128, 115),
+          ),
+          ),
+            const SizedBox(height: 10),
+          
           Text
             ('${_controller.value}', 
             style: const TextStyle(
               fontSize: 65,
               fontWeight: FontWeight.bold,
-              fontFamily: 'RobotoMono'
-              ),
+              fontFamily: 'poppins', 
+              color: const Color.fromARGB(255, 0, 128, 115),
             ),
-
+            ),
           const SizedBox(height: 20),
 
           // Input Field
@@ -70,6 +77,7 @@ class _CounterViewState extends State<CounterView> {
               keyboardType: TextInputType.number,
               decoration: const InputDecoration(
                 labelText: "Masukkan nilai (Step)",
+                labelStyle: TextStyle(color: Color.fromARGB(255, 0, 128, 115)),
                 border: OutlineInputBorder(),
               ),
             ),
@@ -93,31 +101,19 @@ class _CounterViewState extends State<CounterView> {
                 final reversedIndex = _controller.history.length - 1 - index;
                 
                 return ListTile(
-                  leading: const Icon(Icons.history, color: Color.fromARGB(255, 0, 0, 0)),
+                  leading: const Icon(Icons.history, color: const Color.fromARGB(255, 0, 128, 115),),
                   title: Text(_controller.history[reversedIndex]),
-                  dense: true,
+                  textColor: const Color.fromARGB(255, 0, 128, 115),
                 );
               },
             ),
           ),
         ],
       ),
-      floatingActionButton: Column(
-  mainAxisAlignment: MainAxisAlignment.center,
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
+      floatingActionButton: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
   children: [
-    // Tombol Reset
-    SizedBox(
-      height: 50,
-      width: 50,
-      child: FloatingActionButton(
-        onPressed: () {
-          _showResetDialog(); // Panggil fungsi konfirmasi
-        },
-        heroTag: "btn_reset",
-        child: const Icon(Icons.refresh),
-    ),
-    ),
-    const SizedBox(width: 20),
 
     // Tombol Kurang
     FloatingActionButton(
@@ -128,10 +124,27 @@ class _CounterViewState extends State<CounterView> {
         });
       },
       heroTag: "btn_minus",
-      child: const Icon(Icons.remove),
+      child: const Icon(Icons.remove, color: Color.fromARGB(255, 0, 0, 0)),
+      backgroundColor: const Color.fromARGB(255, 255, 85, 18),
     ),
+    const SizedBox(width: 55),
 
-    const SizedBox(width: 20),
+    SizedBox(
+          height: 70,
+          width: 140,
+          child: FloatingActionButton(
+            onPressed: () {
+              _showResetDialog(); // Panggil fungsi konfirmasi
+            },
+            heroTag: "btn_reset",
+            child: const Text(
+              "Reset",
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color.fromARGB(255, 0, 0, 0)),
+        ),
+        backgroundColor: const Color.fromARGB(255, 0, 128, 115),
+        ),
+    ),
+        const SizedBox(width: 55),
 
     // Tombol Tambah
     FloatingActionButton(
@@ -142,7 +155,8 @@ class _CounterViewState extends State<CounterView> {
         });
       },
       heroTag: "btn_plus",
-      child: const Icon(Icons.add),
+      child: const Icon(Icons.add, color: Color.fromARGB(255, 0, 0, 0)),
+      backgroundColor: const Color.fromARGB(255, 26, 235, 43),
     ),
   ],
 ),
