@@ -85,7 +85,7 @@ class _CounterViewState extends State<CounterView> {
 
           const SizedBox(height: 20),
           const Divider(), // Garis pembatas
-          const Text("Histori Aktivitas:", style: TextStyle(fontWeight: FontWeight.bold)),
+          const Text("Histori Aktivitas:", style: TextStyle(fontWeight: FontWeight.bold, color: Color.fromARGB(255, 0, 128, 115))),
 
           // --- BAGIAN HISTORI REAL-TIME ---
           Expanded(
