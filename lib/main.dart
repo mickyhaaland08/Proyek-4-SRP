@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:logbook_app_001/counter_view.dart';
+import 'package:logbook_app_001/features/onboarding/onboarding_view.dart';
 
 void main() {
   runApp(const MyApp());
@@ -12,7 +12,7 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'Flutter Demo',
       debugShowCheckedModeBanner: false,
-      home: const CounterView()
+      home: const OnboardingView()
     );
   }
 }
