@@ -23,17 +23,20 @@ class _LoginViewState extends State<LoginView> {
     String user = _userController.text;
     String pass = _passController.text;
 
-    bool isSuccess = _controller.login(user, pass);
+    String? validationMessage = _controller.validateInput(user, pass);
 
-    if (isSuccess) {
+    if (validationMessage != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(validationMessage),
+          backgroundColor: AppColors.textDanger,
+        ),
+      );
+    } else {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => CounterView(username: user)),
       );
-    } else {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text("Login Gagal!")));
     }
   }
 
@@ -146,25 +149,7 @@ class _LoginViewState extends State<LoginView> {
                     width: double.infinity,
                     height: 50,
                     child: ElevatedButton(
-                      onPressed: locked
-                          ? null
-                          : () {
-                              String? validationMessage = _controller
-                                  .validateInput(
-                                    _userController.text,
-                                    _passController.text,
-                                  );
-                              if (validationMessage != null) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text(validationMessage),
-                                    backgroundColor: AppColors.textDanger,
-                                  ),
-                                );
-                              } else {
-                                _handleLogin();
-                              }
-                            },
+                      onPressed: locked ? null : _handleLogin,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: locked
                             ? AppColors.disabled

@@ -10,7 +10,7 @@ class LoginController extends ChangeNotifier {
   bool get isLocked => _isLocked;
   int get remainingSecond => _remainingSecond;
   // Database sederhana (Hardcoded)
-  Map<String, String> _userDatabase = {
+  final Map<String, String> _userDatabase = {
     "admin": "123",
     "user": "123",
     "guest": "123",

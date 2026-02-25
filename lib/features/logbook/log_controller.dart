@@ -6,9 +6,14 @@ import './models/log_model.dart';
 class LogController {
   final ValueNotifier<List<LogModel>> logsNotifier = ValueNotifier([]);
   final ValueNotifier<List<LogModel>> filteredLogs = ValueNotifier([]);
-  static const String _storageKey = 'user_logs_data';
 
-  LogController() {
+  // Gunakan username sebagai bagian dari storage key agar setiap user
+  // memiliki data logbook yang terpisah
+  final String username;
+  late final String _storageKey;
+
+  LogController({required this.username}) {
+    _storageKey = 'user_logs_data_$username';
     loadFromDisk();
     // Setiap kali logsNotifier berubah, sync ke filteredLogs jika tidak sedang search
     logsNotifier.addListener(() {
@@ -16,22 +21,24 @@ class LogController {
     });
   }
 
-  void addLog(String title, String desc) {
+  void addLog(String title, String desc, String category) {
     final newLog = LogModel(
       title: title,
       description: desc,
       date: DateTime.now().toString(),
+      category: category,
     );
     logsNotifier.value = [...logsNotifier.value, newLog];
     saveToDisk();
   }
 
-  void updateLog(int index, String title, String desc) {
+  void updateLog(int index, String title, String desc, String category) {
     final currentLogs = List<LogModel>.from(logsNotifier.value);
     currentLogs[index] = LogModel(
       title: title,
       description: desc,
       date: DateTime.now().toString(),
+      category: category,
     );
     logsNotifier.value = currentLogs;
     saveToDisk();
