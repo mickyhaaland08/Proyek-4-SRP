@@ -1,37 +1,139 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:logbook_app_001/core/app_colors.dart';
 import 'package:logbook_app_001/features/logbook/widgets/log_item_widget.dart';
 import 'package:logbook_app_001/features/logbook/log_controller.dart';
+import 'package:logbook_app_001/helpers/log_helper.dart';
+import 'package:logbook_app_001/services/mongo_service.dart';
 import 'package:logbook_app_001/features/onboarding/onboarding_view.dart';
 import './models/log_model.dart';
 
 class CounterView extends StatefulWidget {
-  // Tambahkan variabel final untuk menampung nama
   final String username;
-
-  // Update Constructor agar mewajibkan (required) kiriman nama
   const CounterView({super.key, required this.username});
 
   @override
   State<CounterView> createState() => _CounterViewState();
 }
 
-class _CounterViewState extends State<CounterView> {
-  late final LogController _controller;
-
-  @override
-  void initState() {
-    super.initState();
-    // Inisialisasi controller dengan username agar data terpisah per pengguna
-    _controller = LogController(username: widget.username);
-  }
-
+class _CounterViewState extends State<CounterView>
+    with SingleTickerProviderStateMixin {
+  final LogController _controller = LogController();
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _contentController = TextEditingController();
   final TextEditingController _searchController = TextEditingController();
   String _selectedCategory = 'Pribadi';
 
-  // ── Helper: tampilkan SnackBar dengan warna & ikon berbeda ────────────────
+  // ── FutureBuilder state ──────────────────────────────────────────────────
+  late Future<List<LogModel>> _logsFuture;
+
+  // ── Connection Guard state ───────────────────────────────────────────────
+  bool _isOffline = false;
+  String _offlineMessage = '';
+
+  // ── Shimmer animation ────────────────────────────────────────────────────
+  late final AnimationController _shimmerController;
+  late final Animation<double> _shimmerAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+
+    // Shimmer controller – loop terus-menerus selama loading
+    _shimmerController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat();
+    _shimmerAnimation = Tween<double>(begin: -2, end: 2).animate(
+      CurvedAnimation(parent: _shimmerController, curve: Curves.easeInOut),
+    );
+
+    // Load awal: koneksi ke Atlas → fetch data
+    _logsFuture = _fetchFromCloud();
+  }
+
+  @override
+  void dispose() {
+    _shimmerController.dispose();
+    _titleController.dispose();
+    _contentController.dispose();
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  // ── Fetch data dari Cloud (dipakai FutureBuilder & refresh) ───────────────
+  Future<List<LogModel>> _fetchFromCloud() async {
+    // Reset offline state setiap kali fetch baru dimulai
+    if (mounted) setState(() => _isOffline = false);
+
+    await LogHelper.writeLog(
+      "UI: Mulai fetch data dari Cloud...",
+      source: "log_view.dart",
+    );
+    try {
+      await MongoService().connect().timeout(
+        const Duration(seconds: 15),
+        onTimeout: () =>
+            throw const SocketException("Koneksi timeout setelah 15 detik."),
+      );
+      final data = await MongoService().getLogs();
+      _controller.logsNotifier.value = data;
+      _controller.filteredLogs.value = data;
+      await LogHelper.writeLog(
+        "UI: ${data.length} data berhasil dimuat.",
+        source: "log_view.dart",
+        level: 2,
+      );
+      return data;
+    } on SocketException catch (e) {
+      // Tidak ada koneksi internet atau host tidak terjangkau
+      final msg =
+          'Tidak ada koneksi internet.\nPastikan WiFi/data aktif dan coba lagi.';
+      if (mounted) {
+        setState(() {
+          _isOffline = true;
+          _offlineMessage = msg;
+        });
+      }
+      await LogHelper.writeLog(
+        "UI: Offline — SocketException: $e",
+        source: "log_view.dart",
+        level: 1,
+      );
+      throw Exception(msg);
+    } catch (e) {
+      // Error lain (auth, timeout, dsb.)
+      final isTimeout =
+          e.toString().contains('Timeout') || e.toString().contains('timeout');
+      final msg = isTimeout
+          ? 'Koneksi ke server timeout.\nCek sinyal HP atau IP Whitelist Atlas.'
+          : 'Gagal terhubung ke server:\n$e';
+      if (mounted) {
+        setState(() {
+          _isOffline = true;
+          _offlineMessage = msg;
+        });
+      }
+      await LogHelper.writeLog(
+        "UI: Error - $e",
+        source: "log_view.dart",
+        level: 1,
+      );
+      throw Exception(msg);
+    }
+  }
+
+  // ── Trigger refresh: buat Future baru → FutureBuilder rebuild ─────────────
+  Future<void> _refreshLogs() async {
+    setState(() {
+      _searchController.clear();
+      _logsFuture = _fetchFromCloud();
+    });
+    // Tunggu future selesai agar RefreshIndicator mati setelah data masuk
+    await _logsFuture.catchError((_) => <LogModel>[]);
+  }
+
+  // ── SnackBar helper ────────────────────────────────────────────────────────
   void _showSnackBar(
     String message, {
     Color color = Colors.teal,
@@ -57,8 +159,8 @@ class _CounterViewState extends State<CounterView> {
     );
   }
 
+  // ── Dialog Tambah ──────────────────────────────────────────────────────────
   void _showAddLogDialog() {
-    // Bersihkan input sebelum dialog dibuka agar tidak ada sisa teks
     _titleController.clear();
     _contentController.clear();
     _selectedCategory = 'Pribadi';
@@ -99,11 +201,8 @@ class _CounterViewState extends State<CounterView> {
                     ),
                   );
                 }).toList(),
-                onChanged: (newValue) {
-                  setStateDialog(() {
-                    _selectedCategory = newValue ?? 'Pribadi';
-                  });
-                },
+                onChanged: (v) =>
+                    setStateDialog(() => _selectedCategory = v ?? 'Pribadi'),
               ),
             ],
           ),
@@ -113,18 +212,17 @@ class _CounterViewState extends State<CounterView> {
               child: const Text("Batal"),
             ),
             ElevatedButton(
-              onPressed: () {
-                // Jalankan fungsi tambah di Controller
-                _controller.addLog(
+              onPressed: () async {
+                Navigator.pop(context);
+                await _controller.addLog(
                   _titleController.text,
                   _contentController.text,
                   _selectedCategory,
                 );
-
-                // Bersihkan input dan tutup dialog
                 _titleController.clear();
                 _contentController.clear();
-                Navigator.pop(context);
+                // Auto-refresh: fetch ulang dari Cloud
+                _refreshLogs();
                 _showSnackBar(
                   "Catatan berhasil ditambahkan!",
                   color: AppColors.primaryDark,
@@ -139,6 +237,7 @@ class _CounterViewState extends State<CounterView> {
     );
   }
 
+  // ── Dialog Edit ────────────────────────────────────────────────────────────
   void _showEditLogDialog(int index, LogModel log) {
     _titleController.text = log.title;
     _contentController.text = log.description;
@@ -174,11 +273,8 @@ class _CounterViewState extends State<CounterView> {
                     ),
                   );
                 }).toList(),
-                onChanged: (newValue) {
-                  setStateDialog(() {
-                    _selectedCategory = newValue ?? log.category;
-                  });
-                },
+                onChanged: (v) =>
+                    setStateDialog(() => _selectedCategory = v ?? log.category),
               ),
             ],
           ),
@@ -188,8 +284,9 @@ class _CounterViewState extends State<CounterView> {
               child: const Text("Batal"),
             ),
             ElevatedButton(
-              onPressed: () {
-                _controller.updateLog(
+              onPressed: () async {
+                Navigator.pop(context);
+                await _controller.updateLog(
                   index,
                   _titleController.text,
                   _contentController.text,
@@ -197,7 +294,8 @@ class _CounterViewState extends State<CounterView> {
                 );
                 _titleController.clear();
                 _contentController.clear();
-                Navigator.pop(context);
+                // Auto-refresh
+                _refreshLogs();
                 _showSnackBar(
                   "Catatan berhasil diperbarui!",
                   color: Colors.blue,
@@ -212,6 +310,36 @@ class _CounterViewState extends State<CounterView> {
     );
   }
 
+  // ── Shimmer Widget ─────────────────────────────────────────────────────────
+  Widget _buildShimmerCard() {
+    return AnimatedBuilder(
+      animation: _shimmerAnimation,
+      builder: (context, _) {
+        return Container(
+          margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          height: 72,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            gradient: LinearGradient(
+              begin: Alignment(_shimmerAnimation.value - 1, 0),
+              end: Alignment(_shimmerAnimation.value + 1, 0),
+              colors: const [
+                Color(0xFF2A2A2A),
+                Color(0xFF3D3D3D),
+                Color(0xFF2A2A2A),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildShimmerList() {
+    return Column(children: List.generate(5, (_) => _buildShimmerCard()));
+  }
+
+  // ── Build utama ────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -222,39 +350,38 @@ class _CounterViewState extends State<CounterView> {
         actions: [
           IconButton(
             icon: const Icon(Icons.logout),
+            tooltip: "Logout",
             onPressed: () {
               showDialog(
                 context: context,
-                builder: (BuildContext context) {
-                  return AlertDialog(
-                    title: const Text("Konfirmasi Logout"),
-                    content: const Text(
-                      "Apakah Anda yakin? Data yang belum disimpan mungkin akan hilang.",
+                builder: (ctx) => AlertDialog(
+                  title: const Text("Konfirmasi Logout"),
+                  content: const Text(
+                    "Apakah Anda yakin? Data yang belum disimpan mungkin akan hilang.",
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      child: const Text("Batal"),
                     ),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(context),
-                        child: const Text("Batal"),
+                    TextButton(
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        Navigator.pushAndRemoveUntil(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const OnboardingView(),
+                          ),
+                          (route) => false,
+                        );
+                      },
+                      child: const Text(
+                        "Ya, Keluar",
+                        style: TextStyle(color: Colors.red),
                       ),
-                      TextButton(
-                        onPressed: () {
-                          Navigator.pop(context);
-                          Navigator.pushAndRemoveUntil(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => const OnboardingView(),
-                            ),
-                            (route) => false,
-                          );
-                        },
-                        child: const Text(
-                          "Ya, Keluar",
-                          style: TextStyle(color: Colors.red),
-                        ),
-                      ),
-                    ],
-                  );
-                },
+                    ),
+                  ],
+                ),
               );
             },
           ),
@@ -262,30 +389,73 @@ class _CounterViewState extends State<CounterView> {
       ),
       body: Column(
         children: [
-          // ── Search Bar ──────────────────────────────────────────────────
+          // ── Offline Mode Warning Banner ──────────────────────────────────
+          if (_isOffline)
+            Material(
+              elevation: 2,
+              child: Container(
+                width: double.infinity,
+                color: Colors.orange.shade800,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 10,
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.wifi_off, color: Colors.white, size: 20),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        _offlineMessage,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: _refreshLogs,
+                      style: TextButton.styleFrom(
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                      ),
+                      child: const Text(
+                        'Coba Lagi',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+          // ── Search Bar ───────────────────────────────────────────────────
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
             child: TextField(
               controller: _searchController,
               style: TextStyle(color: AppColors.primaryLight),
-              onChanged: (query) => _controller.searchLog(query),
+              onChanged: (query) {
+                // Filter lokal dari data yang sudah di-fetch
+                _controller.searchLog(query);
+                setState(() {}); // rebuild agar ValueListenable ikut update
+              },
               decoration: InputDecoration(
                 hintText: "Cari catatan...",
                 hintStyle: const TextStyle(color: AppColors.hint),
                 prefixIcon: Icon(Icons.search, color: AppColors.primaryDark),
                 suffixIcon: ValueListenableBuilder<TextEditingValue>(
                   valueListenable: _searchController,
-                  builder: (context, value, _) {
-                    return value.text.isEmpty
-                        ? const SizedBox.shrink()
-                        : IconButton(
-                            icon: Icon(Icons.clear, color: AppColors.disabled),
-                            onPressed: () {
-                              _searchController.clear();
-                              _controller.searchLog('');
-                            },
-                          );
-                  },
+                  builder: (context, value, _) => value.text.isEmpty
+                      ? const SizedBox.shrink()
+                      : IconButton(
+                          icon: Icon(Icons.clear, color: AppColors.disabled),
+                          onPressed: () {
+                            _searchController.clear();
+                            _controller.searchLog('');
+                            setState(() {});
+                          },
+                        ),
                 ),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
@@ -305,77 +475,213 @@ class _CounterViewState extends State<CounterView> {
             ),
           ),
 
-          // ── List Log ────────────────────────────────────────────────────
+          // ── FutureBuilder: Loading / Error / Data ────────────────────────
           Expanded(
-            child: ValueListenableBuilder<List<LogModel>>(
-              valueListenable: _controller.filteredLogs,
-              builder: (context, currentLogs, child) {
-                if (currentLogs.isEmpty) {
+            child: FutureBuilder<List<LogModel>>(
+              future: _logsFuture,
+              builder: (context, snapshot) {
+                // ── LOADING → Shimmer ─────────────────────────────────────
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return Column(
+                    mainAxisAlignment: MainAxisAlignment.start,
+                    children: [
+                      const SizedBox(height: 16),
+                      _buildShimmerList(),
+                      const SizedBox(height: 24),
+                      const Text(
+                        "Menghubungkan ke Cloud...",
+                        style: TextStyle(color: AppColors.hint, fontSize: 13),
+                      ),
+                    ],
+                  );
+                }
+
+                // ── ERROR ─────────────────────────────────────────────────
+                if (snapshot.hasError) {
                   return Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Image.asset(
-                          'assets/images/onboarding_1.png',
-                          width: 220,
-                          opacity: const AlwaysStoppedAnimation(0.7),
-                        ),
-                        const SizedBox(height: 20),
-                        Text(
-                          _searchController.text.isEmpty
-                              ? "Belum ada catatan"
-                              : "Tidak ada catatan yang cocok.",
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            color: AppColors.hint,
-                            fontSize: 15,
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(
+                            Icons.cloud_off,
+                            color: Colors.redAccent,
+                            size: 64,
                           ),
-                        ),
-                      ],
+                          const SizedBox(height: 16),
+                          Text(
+                            "Gagal memuat data:\n${snapshot.error}",
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              color: AppColors.hint,
+                              fontSize: 13,
+                            ),
+                          ),
+                          const SizedBox(height: 24),
+                          ElevatedButton.icon(
+                            onPressed: _refreshLogs,
+                            icon: const Icon(Icons.refresh),
+                            label: const Text("Coba Lagi"),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.primaryDark,
+                              foregroundColor: Colors.white,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   );
                 }
-                return ListView.builder(
-                  itemCount: currentLogs.length,
-                  itemBuilder: (context, index) {
-                    final log = currentLogs[index];
-                    // cari index asli di logsNotifier untuk edit/delete
-                    final realIndex = _controller.logsNotifier.value.indexOf(
-                      log,
-                    );
-                    // Dapatkan konfigurasi kategori
-                    final categoryConfig = Categories.getCategory(log.category);
 
-                    return Card(
-                      color: categoryConfig.cardColor,
-                      child: ListTile(
-                        leading: Icon(
-                          categoryConfig.icon,
-                          color: categoryConfig.color,
-                        ),
-                        title: Text(log.title),
-                        subtitle: Text(log.description),
-                        trailing: Wrap(
-                          children: [
-                            IconButton(
-                              icon: const Icon(Icons.edit, color: Colors.blue),
-                              onPressed: () =>
-                                  _showEditLogDialog(realIndex, log),
+                // ── DATA BERHASIL → pakai filteredLogs untuk search ───────
+                return ValueListenableBuilder<List<LogModel>>(
+                  valueListenable: _controller.filteredLogs,
+                  builder: (context, currentLogs, _) {
+                    // ── EMPTY STATE ───────────────────────────────────────
+                    if (currentLogs.isEmpty) {
+                      return RefreshIndicator(
+                        onRefresh: _refreshLogs,
+                        color: AppColors.primary,
+                        backgroundColor: AppColors.background,
+                        child: SingleChildScrollView(
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          child: SizedBox(
+                            height: MediaQuery.of(context).size.height * 0.6,
+                            child: Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Image.asset(
+                                    'assets/images/onboarding_1.png',
+                                    width: 220,
+                                    opacity: const AlwaysStoppedAnimation(0.7),
+                                  ),
+                                  const SizedBox(height: 20),
+                                  Text(
+                                    _searchController.text.isEmpty
+                                        ? "Belum ada catatan.\nTambahkan catatan pertamamu!"
+                                        : "Tidak ada catatan yang cocok.",
+                                    textAlign: TextAlign.center,
+                                    style: const TextStyle(
+                                      color: AppColors.hint,
+                                      fontSize: 15,
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
-                            IconButton(
-                              icon: const Icon(Icons.delete, color: Colors.red),
-                              onPressed: () {
-                                _controller.removeLog(realIndex);
-                                _controller.searchLog(_searchController.text);
-                                _showSnackBar(
-                                  "Catatan berhasil dihapus!",
-                                  color: Colors.red,
-                                  icon: Icons.delete,
-                                );
-                              },
-                            ),
-                          ],
+                          ),
                         ),
+                      );
+                    }
+
+                    // ── LIST CATATAN ──────────────────────────────────────
+                    return RefreshIndicator(
+                      onRefresh: _refreshLogs,
+                      color: AppColors.primary,
+                      backgroundColor: AppColors.background,
+                      child: ListView.builder(
+                        // physics wajib agar RefreshIndicator bisa dipicu
+                        // meski list pendek
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        itemCount: currentLogs.length,
+                        itemBuilder: (context, index) {
+                          final log = currentLogs[index];
+                          final realIndex = _controller.logsNotifier.value
+                              .indexOf(log);
+                          final categoryConfig = Categories.getCategory(
+                            log.category,
+                          );
+
+                          return Card(
+                            margin: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 5,
+                            ),
+                            color: categoryConfig.cardColor,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: ListTile(
+                              leading: CircleAvatar(
+                                backgroundColor: categoryConfig.color.withAlpha(
+                                  30,
+                                ),
+                                child: Icon(
+                                  categoryConfig.icon,
+                                  color: categoryConfig.color,
+                                ),
+                              ),
+                              title: Text(
+                                log.title,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.black87,
+                                ),
+                              ),
+                              // ✅ Timestamp: "2 menit yang lalu" / "25 Jan 2026"
+                              subtitle: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  if (log.description.isNotEmpty)
+                                    Text(
+                                      log.description,
+                                      style: const TextStyle(
+                                        color: Colors.black54,
+                                      ),
+                                    ),
+                                  const SizedBox(height: 4),
+                                  Row(
+                                    children: [
+                                      const Icon(
+                                        Icons.access_time,
+                                        size: 11,
+                                        color: Colors.black38,
+                                      ),
+                                      const SizedBox(width: 3),
+                                      Text(
+                                        log.timeAgo,
+                                        style: const TextStyle(
+                                          fontSize: 11,
+                                          color: Colors.black38,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                              isThreeLine: log.description.isNotEmpty,
+                              trailing: Wrap(
+                                children: [
+                                  IconButton(
+                                    icon: const Icon(
+                                      Icons.edit,
+                                      color: Colors.blue,
+                                    ),
+                                    onPressed: () =>
+                                        _showEditLogDialog(realIndex, log),
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(
+                                      Icons.delete,
+                                      color: Colors.red,
+                                    ),
+                                    onPressed: () async {
+                                      await _controller.removeLog(realIndex);
+                                      _refreshLogs();
+                                      _showSnackBar(
+                                        "Catatan berhasil dihapus!",
+                                        color: Colors.red,
+                                        icon: Icons.delete,
+                                      );
+                                    },
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
                       ),
                     );
                   },

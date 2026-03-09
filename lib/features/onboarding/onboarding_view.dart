@@ -49,12 +49,7 @@ class _OnboardingViewState extends State<OnboardingView> {
     }
   }
 
-  void _skip() {
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (context) => const LoginView()),
-    );
-  }
+
 
   @override
   Widget build(BuildContext context) {
@@ -63,25 +58,6 @@ class _OnboardingViewState extends State<OnboardingView> {
       body: SafeArea(
         child: Column(
           children: [
-            // ── Tombol Skip kanan atas ─────────────────────────────────────
-            Align(
-              alignment: Alignment.topRight,
-              child: Padding(
-                padding: const EdgeInsets.only(top: 8, right: 16),
-                child: AnimatedOpacity(
-                  opacity: step < 2 ? 1.0 : 0.0,
-                  duration: const Duration(milliseconds: 300),
-                  child: TextButton(
-                    onPressed: step < 2 ? _skip : null,
-                    child: Text(
-                      "Lewati",
-                      style: TextStyle(color: AppColors.disabled),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-
             // ── PageView konten ────────────────────────────────────────────
             Expanded(
               child: PageView.builder(
