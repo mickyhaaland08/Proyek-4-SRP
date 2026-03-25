@@ -11,7 +11,7 @@ class LoginController extends ChangeNotifier {
   int get remainingSecond => _remainingSecond;
   // Database sederhana (Hardcoded) yang memiliki Data Role & User ID
   final Map<String, Map<String, String>> _userDatabase = {
-    "micku": {
+    "micky    ": {
       "password": "123",
       "role": "Ketua",
       "userId": "user_001",
