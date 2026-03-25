@@ -11,18 +11,12 @@ class OnboardingView extends StatefulWidget {
 
 // Data konten setiap halaman onboarding
 const List<Map<String, String>> _onboardingData = [
-  {
-    'image': 'assets/images/onboarding_1.png',
-    'title': 'Selamat Datang',
-  },
+  {'image': 'assets/images/onboarding_1.png', 'title': 'Selamat Datang'},
   {
     'image': 'assets/images/onboarding_2.png',
     'title': 'Semoga Harimu Baik-Baik Saja',
   },
-  {
-    'image': 'assets/images/onboarding_3.png',
-    'title': 'Silahkan Masuk',
-  },
+  {'image': 'assets/images/onboarding_3.png', 'title': 'Silahkan Masuk'},
 ];
 
 class _OnboardingViewState extends State<OnboardingView> {
@@ -48,8 +42,6 @@ class _OnboardingViewState extends State<OnboardingView> {
       );
     }
   }
-
-
 
   @override
   Widget build(BuildContext context) {

@@ -1,10 +1,10 @@
-// login_view.dart
 import 'package:flutter/material.dart';
 import 'package:logbook_app_001/core/app_colors.dart';
-// Import Controller milik sendiri (masih satu folder)
+import 'package:logbook_app_001/core/access_policy.dart';
 import 'package:logbook_app_001/features/auth/login_controller.dart';
-// Import View dari fitur lain (Logbook) untuk navigasi
+import 'package:logbook_app_001/features/logbook/log_controller.dart';
 import 'package:logbook_app_001/features/logbook/log_view.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class LoginView extends StatefulWidget {
   const LoginView({super.key});
@@ -33,11 +33,68 @@ class _LoginViewState extends State<LoginView> {
         ),
       );
     } else {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => CounterView(username: user)),
+      // Ambil Info user dari controller
+      final userInfo = _controller.getUserInfo(user)!;
+
+      _onLoginSuccess(
+        username: user,
+        userId: userInfo['userId']!,
+        role: userInfo['role']!,
+        teamId: userInfo['teamId']!,
       );
     }
+  }
+
+  void _onLoginSuccess({
+    required String username,
+    required String userId,
+    required String role,
+    required String teamId,
+  }) async {
+    final controller = LogController();
+    controller.setUserInfo(userId: userId, role: role, teamId: teamId);
+
+    if (!AccessControlService.canPerform(
+      role,
+      AccessControlService.actionRead,
+    )) {
+      _showSnackBar(
+        "Akses ditolak! Role '$role' tidak dikenali.",
+        color: Colors.red,
+      );
+      return;
+    }
+
+    // --- Simpan state login ke SharedPreferences ---
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('is_logged_in', true);
+    await prefs.setString('username', username);
+    await prefs.setString('user_id', userId);
+    await prefs.setString('role', role);
+    await prefs.setString('team_id', teamId); // Tambahan
+
+    if (!mounted) return;
+
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (context) => CounterView(
+          username: username,
+          userId: userId,
+          role: role,
+          teamId: teamId,
+        ),
+      ),
+    );
+  }
+
+  void _showSnackBar(String message, {Color? color}) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: color ?? AppColors.primary,
+      ),
+    );
   }
 
   @override

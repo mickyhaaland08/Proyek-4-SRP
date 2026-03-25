@@ -1,48 +1,67 @@
 import 'package:intl/intl.dart';
 import 'package:mongo_dart/mongo_dart.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 
-class LogModel {
-  // Field _id dari MongoDB — nullable karena bisa belum ada sebelum disimpan
+part 'log_model.g.dart';
+
+@HiveType(typeId: 0)
+class LogModel extends HiveObject {
+  @HiveField(0)
   final ObjectId? id;
+
+  @HiveField(1)
   final String title;
-  final String date;
+
+  @HiveField(2)
   final String description;
+
+  @HiveField(3)
+  final String date;
+
+  @HiveField(4)
+  final String authorId;
+
+  @HiveField(5)
+  final String teamId;
+
+  @HiveField(6)
   final String category;
 
   LogModel({
     this.id,
     required this.title,
-    required this.date,
     required this.description,
-    this.category = 'Pribadi',
+    required this.date,
+    required this.authorId,
+    required this.teamId,
+    required this.category,
   });
 
-  // Konversi Map (dari MongoDB) ke Object
+  Map<String, dynamic> toMap() {
+    return {
+      '_id': id,
+      'title': title,
+      'description': description,
+      'date': date,
+      'authorId': authorId,
+      'teamId': teamId,
+      'category': category,
+    };
+  }
+
   factory LogModel.fromMap(Map<String, dynamic> map) {
     return LogModel(
-      id: map['_id'] is ObjectId ? map['_id'] as ObjectId : null,
+      id: map['_id'] as ObjectId?,
       title: map['title'] ?? '',
-      date: map['date'] ?? '',
       description: map['description'] ?? '',
-      category: map['category'] ?? 'Pribadi',
+      date: map['date'] ?? '',
+      authorId: map['authorId'] ?? '',
+      teamId: map['teamId'] ?? '',
+      category: map['category'] ?? '',
     );
   }
 
-  // Konversi Object ke Map untuk dikirim ke MongoDB
-  Map<String, dynamic> toMap() {
-    final map = <String, dynamic>{
-      'title': title,
-      'date': date,
-      'description': description,
-      'category': category,
-    };
-    if (id != null) {
-      map['_id'] = id;
-    }
-    return map;
-  }
-
-  // ── Timestamp Helpers (intl) ───────────────────────────────────────────────
+  // ── Timestamp Helpers (intl) ─────────────────────────────────────────────
 
   /// Parse tanggal dari field date (ISO / DateTime.now().toString())
   DateTime? get parsedDate {
@@ -71,11 +90,9 @@ class LogModel {
     if (diff.inSeconds < 60) {
       return 'Baru saja';
     } else if (diff.inMinutes < 60) {
-      final m = diff.inMinutes;
-      return '$m menit yang lalu';
+      return '${diff.inMinutes} menit yang lalu';
     } else if (diff.inHours < 24) {
-      final h = diff.inHours;
-      return '$h jam yang lalu';
+      return '${diff.inHours} jam yang lalu';
     } else if (diff.inDays == 1) {
       return 'Kemarin pukul ${DateFormat('HH:mm', 'id').format(dt)}';
     } else if (diff.inDays < 7) {
